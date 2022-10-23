@@ -15,6 +15,10 @@ globals [
   num-of-cur-waiting    ; number of currently waiting clients
   normal-cur-waiting-queue    ; currently normal clients waiting queue with the client service time
   vip-cur-waiting-queue   ; currently vip clients waiting queue with the client service time
+  normal-cur-waiting-queue-with-id    ; currently normal clients waiting queue with the client service time
+  vip-cur-waiting-queue-with-id   ; currently vip clients waiting queue with the client service time
+
+  
 
 ]
 
@@ -23,6 +27,7 @@ breed [clients client]
 
 turtles-own [
  
+  client-id          ;
   is-vip             ;
   service-time       ;
   waiting-time       ;
@@ -44,7 +49,9 @@ to setup
   set num-of-cur-waiting 0
   set mean-service-time 10
   set normal-cur-waiting-queue []
+  set normal-cur-waiting-queue-with-id []
   set vip-cur-waiting-queue []
+  set vip-cur-waiting-queue-with-id []
   
   setup-staff
   reset-ticks
@@ -70,10 +77,17 @@ to go
     ;set num-of-cur-waiting num-of-cur-waiting + 1
     ;print num-of-cur-waiting
   ]
-  print length normal-cur-waiting-queue
-  print length vip-cur-waiting-queue
   
-  ;ask staff [service]
+  ;write "tick:" print ticks
+  ;write "lenght:" print length normal-cur-waiting-queue
+  if (length normal-cur-waiting-queue >= 1) or (length vip-cur-waiting-queue >= 1) [
+    ;write "normal" print length normal-cur-waiting-queue
+    ;write "vip" print length vip-cur-waiting-queue
+    ;write "normal queue: " print normal-cur-waiting-queue 
+    ;write "vip queue: " print vip-cur-waiting-queue 
+    ask staff [service]]
+  ask clients [patient-checking]
+ 
   tick
  
   
@@ -86,16 +100,19 @@ to create-client
     
     
     setxy (min-pxcor ) (min-pycor )
-    
+    set client-id num-of-cur-waiting
     set service-time random-normal mean-service-time (mean-service-time / 4 )
     
     ifelse random 100 < ratio-of-vips [ 
       set is-vip true 
       set vip-cur-waiting-queue lput service-time vip-cur-waiting-queue 
+      set vip-cur-waiting-queue-with-id  lput client-id normal-cur-waiting-queue-with-id 
+      
     ]
     [ 
       set is-vip false 
       set normal-cur-waiting-queue lput service-time normal-cur-waiting-queue
+      set normal-cur-waiting-queue-with-id  lput client-id vip-cur-waiting-queue-with-id 
     ]
     
     ;print (word ticks "\t" "interval:" "\t" (ticks - last-call-in) "\t" is-vip)
@@ -105,20 +122,44 @@ to create-client
     set willing-to-wait random-normal mean-willing-to-wait ( mean-willing-to-wait / 4 )
     
     set num-of-cur-waiting num-of-cur-waiting + 1
+    set last-call-in ticks
+   ;print last-call-in
+    
   ]
-  set last-call-in ticks
+ 
 end
 
 to service
-  ifelse rest-service-time <= 0 [move-client][set rest-service-time rest-service-time - 1]
-  print rest-service-time
+  ifelse rest-service-time <= 0  ;one staff is available
+  [
+    ;write "staff:" print rest-service-time
+    ifelse (length vip-cur-waiting-queue) = 0 [  ; if vip queue is empty
+    ifelse length normal-cur-waiting-queue = 0 [stop]    ;if both vip and normal queue empty, no client is waiting, no need to service
+    [ ;print length normal-cur-waiting-queue 
+      set rest-service-time first normal-cur-waiting-queue
+      ;print normal-cur-waiting-queue 
+      set normal-cur-waiting-queue remove-item 0 normal-cur-waiting-queue    ;serve the first client in the queue
+      ask-clients-with [client-id = normal-cur-waiting-queue-with-id item 0 normal-cur-waiting-queue-with-id]
+      set normal-cur-waiting-queue remove-item 0 normal-cur-waiting-queue 
+      ;write "staff new:" print rest-service-time
+    ]
+      
+   ]
+    [set rest-service-time first vip-cur-waiting-queue
+      set vip-cur-waiting-queue remove-item 0 vip-cur-waiting-queue ]
+    set num-of-cur-waiting num-of-cur-waiting - 1
+  ]
+  
+  [set rest-service-time rest-service-time - 1]
+  
 end
 
-to move-client
-  ifelse (length vip-cur-waiting-queue) = 0 [  ; if vip queue is empty
-    let get-service-time item 0 normal-cur-waiting-queue 
-    print normal-cur-waiting-queue]
-  [let get-service-time item 0 vip-cur-waiting-queue ]
-  
+
+to patient-checking
+  write "ticks" print ticks
+  print last-call-in
+  ;set waiting-time (ticks - last-call-in)
+  ;print waiting-time
   
 end
+
